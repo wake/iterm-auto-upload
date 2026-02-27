@@ -1,0 +1,127 @@
+#!/bin/bash
+# iterm-upload — iTerm2 fileDropCoprocess script
+# 在 SSH + Claude Code 環境中自動 scp 上傳檔案到遠端
+#
+# fileDropCoprocess 設定：
+#   /path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+
+LOG="/tmp/iterm-upload.log"
+REMOTE_RELATIVE_DIR="~/tmp/iterm-upload"
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"
+}
+
+fallback_local() {
+  log "Fallback: outputting local paths"
+  printf '%s' "$*"
+  exit 0
+}
+
+# --- 解析參數 ---
+jobName="$1"
+autoName="$2"
+tty="$3"
+shift 3
+files=("$@")
+
+log "=== DROP EVENT ==="
+log "jobName=$jobName autoName=$autoName tty=$tty"
+log "files=${files[*]}"
+
+# --- 環境判斷 ---
+if [ "$jobName" != "ssh" ]; then
+  log "Not SSH session (jobName=$jobName), using local paths"
+  printf '%s' "$*"
+  exit 0
+fi
+
+if ! echo "$autoName" | grep -q "Claude Code"; then
+  log "Not Claude Code session (autoName=$autoName), using local paths"
+  printf '%s' "$*"
+  exit 0
+fi
+
+log "SSH + Claude Code detected, proceeding with upload"
+
+# --- 從 ps 解析 SSH process ---
+ssh_cmd=$(ps -t "$tty" -o args= | grep -E '^ssh ' | head -1)
+
+if [ -z "$ssh_cmd" ]; then
+  log "ERROR: Cannot find ssh process on tty=$tty"
+  fallback_local "${files[@]}"
+fi
+
+log "SSH command: $ssh_cmd"
+
+# 解析 -p port（如有）
+port=""
+if echo "$ssh_cmd" | grep -qE ' -p [0-9]+'; then
+  port=$(echo "$ssh_cmd" | grep -oE ' -p [0-9]+' | head -1 | awk '{print $2}')
+  log "Parsed port: $port"
+fi
+
+# 解析 SSH target（user@host 或 config alias）
+# 排除 -o/-p/-i/-L/-R/-D 等帶參數的 option，取最後一個非 option 參數
+target=""
+skip_next=false
+for word in $ssh_cmd; do
+  if $skip_next; then
+    skip_next=false
+    continue
+  fi
+  case "$word" in
+    ssh) continue ;;
+    -[opilLRDJWFebcmSwE]) skip_next=true; continue ;;
+    -*) continue ;;
+    *) target="$word" ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  log "ERROR: Cannot parse SSH target from: $ssh_cmd"
+  fallback_local "${files[@]}"
+fi
+
+log "SSH target: $target"
+
+# --- 建立遠端目錄 ---
+ssh_opts=()
+if [ -n "$port" ]; then
+  ssh_opts+=(-p "$port")
+fi
+
+# mkdir + 取得絕對路徑（一次 SSH 完成）
+remote_dir=$(ssh "${ssh_opts[@]}" "$target" "mkdir -p $REMOTE_RELATIVE_DIR && cd $REMOTE_RELATIVE_DIR && pwd" 2>>"$LOG")
+
+if [ -z "$remote_dir" ]; then
+  log "ERROR: Failed to create remote directory or resolve path"
+  fallback_local "${files[@]}"
+fi
+
+log "Remote absolute dir: $remote_dir"
+
+# --- SCP 上傳 ---
+scp_opts=(-q)
+if [ -n "$port" ]; then
+  scp_opts+=(-P "$port")
+fi
+
+if ! scp "${scp_opts[@]}" "${files[@]}" "$target:$remote_dir/" 2>>"$LOG"; then
+  log "ERROR: SCP upload failed"
+  fallback_local "${files[@]}"
+fi
+
+log "Upload successful"
+
+# --- 輸出遠端路徑（bracketed paste + 絕對路徑）---
+remote_paths=()
+for f in "${files[@]}"; do
+  basename=$(basename "$f")
+  remote_paths+=("$remote_dir/$basename")
+done
+
+output="${remote_paths[*]}"
+log "Output: $output"
+# 用 bracketed paste 序列包住，觸發 Claude Code auto attach
+printf '\e[200~%s\e[201~' "$output"
