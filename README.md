@@ -2,6 +2,12 @@
 
 Drag-and-drop files into an iTerm2 window to automatically SCP upload them to a remote host and paste the remote path into [Claude Code](https://claude.ai/code) CLI — with auto-attach support.
 
+## Problem
+
+When using Claude Code over SSH (with or without tmux), there's no built-in way to share local files with the remote Claude Code session. You'd have to manually `scp` files, then type the remote path into Claude Code.
+
+This project makes it a single drag-and-drop: files are uploaded and auto-attached as context in Claude Code.
+
 ## How It Works
 
 ```
@@ -9,42 +15,78 @@ Drag file into iTerm2
   → iTerm2 triggers fileDropCoprocess
   → Script detects SSH + Claude Code environment
   → scp uploads file to remote /tmp/iterm-upload/
-  → Outputs absolute path with bracketed paste sequence
+  → Outputs absolute path wrapped in bracketed paste sequence
   → Claude Code auto-attaches the file ✓
 ```
 
 When not in an SSH + Claude Code session, files are pasted as local paths (default iTerm2 behavior).
 
-### Environment Detection
+### Detection Logic
 
 | Scenario | jobName | autoName | Behavior |
 |----------|---------|----------|----------|
 | Local shell | `bash`/`zsh` | `bash` | Paste local path |
 | Local Claude Code | `node` | `✳ Claude Code` | Paste local path |
 | SSH → shell | `ssh` | `bash` | Paste local path |
-| SSH → Claude Code | `ssh` | `✳ Claude Code` | **Upload + paste remote path** |
-| SSH → tmux → Claude Code | `ssh` | `✳ Claude Code` | **Upload + paste remote path** |
+| SSH → Claude Code | `ssh` | `✳ topic name` | **Upload + paste remote path** |
+| SSH → tmux → Claude Code | `ssh` | `✳ topic name` | **Upload + paste remote path** |
 
-### Claude Code Auto-Attach Mechanism
+## Prerequisites
+
+Four conditions must be met for auto-upload to work:
+
+1. **iTerm2 fileDropCoprocess** — local hook that intercepts drag-and-drop events
+2. **SSH session** — detected via `jobName == "ssh"`
+3. **Claude Code running** — detected via `autoName` containing `"Claude Code"`
+4. **tmux title passthrough** (if using tmux) — allows Claude Code's terminal title to propagate through tmux to iTerm2
+
+### Why these conditions?
+
+The script uses iTerm2's interpolated string variables to determine the environment:
+
+- **`\(jobName)`** — the foreground process name. When SSH is active, this is `"ssh"`.
+- **`\(autoName)`** — the session's automatic name, derived from the terminal title set by the running application. Claude Code sets this via OSC 0 escape sequence (`\x1B]0;<title>\x07`) to something like `✳ Claude Code` or `✳ <topic>`.
+- **`\(tty)`** — the local TTY device, used to find the SSH process via `ps -t` and parse the remote host.
+
+When all conditions are met (SSH session + Claude Code detected), the script uploads via `scp` and outputs the remote path. Otherwise, it falls back to pasting local paths.
+
+### How Claude Code sets the terminal title
+
+Claude Code automatically manages the terminal title using OSC 0 escape sequences:
+
+| Event | Title set to |
+|-------|-------------|
+| Session start | `✳ Claude Code` |
+| AI detects new topic | `✳ <2-3 word topic>` (e.g., `✳ Fix auth bug`) |
+| `/rename xxx` | `✳ xxx` |
+| Thinking (spinner) | `⠂ <topic>` / `⠐ <topic>` (alternating at 960ms) |
+
+This title is what iTerm2 sees as `autoName`. The detection script matches on `"Claude Code"` in the initial title. Note that once the AI auto-renames the topic, `autoName` changes — but by then the session is already established.
+
+**Relevant environment variable:** `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` disables all title updates.
+
+### How Claude Code auto-attaches files
 
 Claude Code's TUI detects file paths through **bracketed paste mode** — a terminal protocol where pasted content is wrapped in `\e[200~...\e[201~` escape sequences. When Claude Code receives a bracketed paste containing an **absolute file path** that exists on the filesystem, it automatically attaches the file as context.
 
-Key requirements for auto-attach:
-- Path must be **absolute** (e.g., `/home/user/file.png`). Paths starting with `~/` will **not** trigger attach.
+Requirements for auto-attach:
+- Path must be **absolute** (e.g., `/home/user/file.png`). `~/` paths will **not** trigger it.
 - The file must **exist** on the remote filesystem at the time of paste.
-- Content must arrive via **bracketed paste**, not as keyboard input.
+- Content must arrive via **bracketed paste**, not as regular keyboard input.
 
 The coprocess stdout is normally injected as keyboard input (which would not trigger attach). By wrapping the output in bracketed paste sequences, we simulate a paste event that Claude Code recognizes.
 
 ## Setup
 
-### 1. Clone the repository
+### 1. Clone the repository (local machine)
 
 ```bash
 git clone https://github.com/wake/iterm-auto-upload.git
 ```
 
-### 2. Configure iTerm2 fileDropCoprocess
+### 2. Configure iTerm2 fileDropCoprocess (local machine)
+
+This is the hook that intercepts drag-and-drop events in iTerm2. It replaces the default "paste file path" behavior with our upload script.
 
 Go to **iTerm2 → Settings → Advanced** → search for **"file drop"**, and set the value to:
 
@@ -52,7 +94,7 @@ Go to **iTerm2 → Settings → Advanced** → search for **"file drop"**, and s
 /path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
 ```
 
-Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository. You can customize `/tmp/iterm-upload` to any remote directory you prefer.
+Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository. `/tmp/iterm-upload` is the remote upload directory — customize as needed.
 
 Or via `defaults write` (quit iTerm2 first):
 
@@ -61,9 +103,13 @@ defaults write com.googlecode.iterm2 fileDropCoprocess \
   -string '/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)'
 ```
 
-### 3. tmux title passthrough (if using tmux on remote)
+**How it works:** When you drag a file onto an iTerm2 window, iTerm2 launches the script as a coprocess, passing session metadata (`jobName`, `autoName`, `tty`) and the dropped file paths. The script's stdout is injected into the terminal as input.
 
-For Claude Code detection to work through tmux, add to the remote `~/.tmux.conf`:
+### 3. tmux title passthrough (remote machine, if using tmux)
+
+Claude Code sets the terminal title via OSC 0 escape sequences. For this title to reach iTerm2 through tmux, tmux must be configured to forward pane titles.
+
+Add to the remote `~/.tmux.conf`:
 
 ```bash
 set -g set-titles on
@@ -71,30 +117,42 @@ set -g set-titles-string "#{pane_title}"
 set -g allow-rename on
 ```
 
+Then reload: `tmux source ~/.tmux.conf`
+
+**Why each setting:**
+
+| Setting | Purpose |
+|---------|---------|
+| `set-titles on` | Enables tmux to update the outer terminal's title |
+| `set-titles-string "#{pane_title}"` | Forwards the pane's title (set by Claude Code via OSC 0) to the outer terminal |
+| `allow-rename on` | Allows applications inside tmux to set the pane title via escape sequences |
+
+Without these settings, tmux absorbs the title change and iTerm2 never sees `autoName` containing "Claude Code", causing the script to fall back to local paths.
+
+### 4. SSH key authentication (recommended)
+
+The script makes two SSH connections per upload (one for `mkdir -p`, one for `scp`). Interactive authentication (password prompts, 2FA) will cause these to fail silently.
+
+Recommended setup:
+- Use SSH key authentication, or
+- Enable `ControlMaster` multiplexing in `~/.ssh/config`:
+
+```
+Host *
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+```
+
+This reuses your existing SSH connection for the upload, avoiding extra authentication prompts.
+
 ## Known Limitations
 
-### SSH target parsing
-
-The script parses the SSH command from `ps -t <tty>`. This may fail if:
-- The SSH process has exited or is not visible in `ps`
-- SSH is invoked through a wrapper script (the command won't start with `ssh `)
-- ProxyJump or ProxyCommand chains where the final target isn't directly visible
-
-### SSH options parsing
-
-The script skips known SSH options that take arguments (`-o`, `-p`, `-i`, `-l`, `-L`, `-R`, `-D`, `-J`, `-W`, `-F`, `-e`, `-b`, `-c`, `-m`, `-S`, `-w`, `-E`). Unrecognized options with arguments could cause the target to be misidentified.
-
-### Port detection
-
-Custom ports are only detected from explicit `-p PORT` in the SSH command. If the port is defined in `~/.ssh/config`, scp will rely on the same config (which usually works correctly).
-
-### File overwrite
-
-Files uploaded to `/tmp/iterm-upload/` are not namespaced. Uploading a file with the same name as an existing file will overwrite it silently.
-
-### SSH authentication
-
-The script makes two SSH connections (one for `mkdir -p` + `pwd`, one for `scp`). If your SSH setup requires interactive authentication (password prompt, 2FA), these will fail silently and fall back to local paths. Using SSH key authentication or `ControlMaster` multiplexing is recommended.
+- **SSH target parsing** — The script parses `ps -t <tty>` output. SSH invoked through wrapper scripts may not be detected.
+- **SSH options parsing** — Unrecognized options with arguments could cause the target to be misidentified.
+- **Port detection** — Only detected from explicit `-p PORT` in the SSH command. Ports in `~/.ssh/config` are handled by scp automatically.
+- **File overwrite** — Same-name files are overwritten silently (no namespacing).
+- **autoName timing** — After Claude Code auto-renames the topic, `autoName` may no longer contain "Claude Code". This only affects new drag-and-drop events; the initial session detection works because the default title is `✳ Claude Code`.
 
 ## Troubleshooting
 
@@ -116,77 +174,3 @@ On any error (SSH target parsing, mkdir, scp), the script falls back to pasting 
 | Path pasted | Yes (auto-attach in Claude Code) | No path pasted |
 | Environment detection | Auto-detect SSH + Claude Code | None |
 | Non-SSH fallback | Paste local path | No action |
-
----
-
-# iterm-auto-upload（中文）
-
-拖曳檔案到 iTerm2 視窗，自動 SCP 上傳到遠端主機，並在 [Claude Code](https://claude.ai/code) CLI 中自動附加（auto-attach）為上下文。
-
-## 運作原理
-
-```
-拖曳檔案到 iTerm2
-  → iTerm2 觸發 fileDropCoprocess
-  → 腳本偵測 SSH + Claude Code 環境
-  → scp 上傳檔案到遠端 /tmp/iterm-upload/
-  → 輸出絕對路徑 + bracketed paste 序列
-  → Claude Code 自動附加檔案 ✓
-```
-
-非 SSH + Claude Code 環境時，直接貼上本地路徑（iTerm2 預設行為）。
-
-### Claude Code 自動附加機制
-
-Claude Code 的 TUI 透過 **bracketed paste mode** 偵測檔案路徑 — 終端協議會將貼上的內容包在 `\e[200~...\e[201~` 跳脫序列中。當 Claude Code 收到包含**絕對檔案路徑**的 bracketed paste，且該檔案存在於檔案系統上，就會自動附加為 context。
-
-自動附加的條件：
-- 路徑必須是**絕對路徑**（如 `/home/user/file.png`）。`~/` 開頭**不會**觸發。
-- 檔案在貼上時必須已**存在**於遠端。
-- 內容必須透過 **bracketed paste** 到達，而非鍵盤輸入。
-
-Coprocess 的 stdout 預設以鍵盤輸入方式注入（不會觸發 attach）。透過在輸出中加上 bracketed paste 序列，我們模擬了貼上事件，讓 Claude Code 能夠辨識。
-
-## 設定方式
-
-### 1. Clone 本專案
-
-```bash
-git clone https://github.com/wake/iterm-auto-upload.git
-```
-
-### 2. 設定 iTerm2 fileDropCoprocess
-
-前往 **iTerm2 → Settings → Advanced** → 搜尋 **"file drop"**，設定為：
-
-```
-/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
-```
-
-將 `/path/to/iterm-auto-upload` 替換為實際 clone 路徑。`/tmp/iterm-upload` 可替換為任何你偏好的遠端目錄。
-
-### 3. tmux 標題穿透（遠端使用 tmux 時）
-
-在遠端 `~/.tmux.conf` 加入：
-
-```bash
-set -g set-titles on
-set -g set-titles-string "#{pane_title}"
-set -g allow-rename on
-```
-
-## 已知限制
-
-- **SSH target 解析**：從 `ps -t <tty>` 解析，透過 wrapper script 啟動的 SSH 可能無法辨識。
-- **SSH options 解析**：未列入的帶參數 option 可能導致 target 誤判。
-- **Port 偵測**：僅從 SSH command 中的 `-p PORT` 偵測。`~/.ssh/config` 中定義的 port 會由 scp 自動使用。
-- **檔案覆蓋**：同名檔案會直接覆蓋，無命名空間隔離。
-- **SSH 驗證**：需要兩次 SSH 連線（mkdir + scp），互動式驗證（密碼、2FA）會導致失敗並 fallback。建議使用 SSH key 或 `ControlMaster`。
-
-## 除錯
-
-所有操作記錄在 `/tmp/iterm-upload.log`：
-
-```bash
-cat /tmp/iterm-upload.log
-```
