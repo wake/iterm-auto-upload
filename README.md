@@ -61,7 +61,7 @@ Claude Code automatically manages the terminal title using OSC 0 escape sequence
 | `/rename xxx` | `✳ xxx` |
 | Thinking (spinner) | `⠂ <topic>` / `⠐ <topic>` (alternating at 960ms) |
 
-This title is what iTerm2 sees as `autoName`. The detection script matches on `"Claude Code"` in the initial title. Note that once the AI auto-renames the topic, `autoName` changes — but by then the session is already established.
+This title is what iTerm2 sees as `autoName`. The detection script matches on `"Claude Code"` in the title. **Problem:** once the AI auto-renames the topic (e.g., to `✳ Fix auth bug`), the title no longer contains "Claude Code" and detection breaks. This is why step 3 (tmux wrapper + title suffix) is critical — it appends `- Claude Code` to every title, ensuring reliable detection.
 
 **Relevant environment variable:** `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` disables all title updates.
 
@@ -105,15 +105,40 @@ defaults write com.googlecode.iterm2 fileDropCoprocess \
 
 **How it works:** When you drag a file onto an iTerm2 window, iTerm2 launches the script as a coprocess, passing session metadata (`jobName`, `autoName`, `tty`) and the dropped file paths. The script's stdout is injected into the terminal as input.
 
-### 3. tmux title passthrough (remote machine, if using tmux)
+### 3. tmux title passthrough with "Claude Code" suffix (remote machine, if using tmux)
 
 Claude Code sets the terminal title via OSC 0 escape sequences. For this title to reach iTerm2 through tmux, tmux must be configured to forward pane titles.
 
-Add to the remote `~/.tmux.conf`:
+**The problem:** Claude Code initially sets the title to `✳ Claude Code`, but soon auto-renames it to a topic like `✳ Fix auth bug`. Once renamed, `autoName` no longer contains "Claude Code" and the detection script stops working for subsequent drag-and-drop events.
+
+**The solution:** Use a shell wrapper that marks the tmux pane, and configure `set-titles-string` to append `- Claude Code` to the title only for marked panes. This ensures `autoName` always contains "Claude Code" regardless of topic changes.
+
+#### 3a. Shell wrapper (remote `~/.zshrc` or `~/.bashrc`)
+
+Replace your `claude` alias with a function that sets a tmux pane option:
+
+```bash
+unalias claude 2>/dev/null
+
+claude() {
+  [ -n "$TMUX" ] && tmux set-option -p @is_claude 1
+  /path/to/claude "$@"
+  [ -n "$TMUX" ] && tmux set-option -pu @is_claude
+}
+```
+
+Replace `/path/to/claude` with the actual path to your Claude Code binary (e.g., `~/.local/bin/claude`).
+
+**How it works:**
+- On launch: sets a tmux pane-level user option `@is_claude=1`
+- On exit: unsets the option (`-pu` = unset pane option)
+- `[ -n "$TMUX" ]` skips tmux commands when not inside tmux, so the wrapper works everywhere
+
+#### 3b. tmux configuration (remote `~/.tmux.conf`)
 
 ```bash
 set -g set-titles on
-set -g set-titles-string "#{pane_title}"
+set -g set-titles-string '#{?#{==:#{@is_claude},1},#{pane_title} - Claude Code,#{pane_title}}'
 set -g allow-rename on
 ```
 
@@ -124,8 +149,28 @@ Then reload: `tmux source ~/.tmux.conf`
 | Setting | Purpose |
 |---------|---------|
 | `set-titles on` | Enables tmux to update the outer terminal's title |
-| `set-titles-string "#{pane_title}"` | Forwards the pane's title (set by Claude Code via OSC 0) to the outer terminal |
+| `set-titles-string '...'` | Conditionally appends `- Claude Code` to the title for panes running Claude Code |
 | `allow-rename on` | Allows applications inside tmux to set the pane title via escape sequences |
+
+**The `set-titles-string` format explained:**
+
+```
+#{?#{==:#{@is_claude},1},#{pane_title} - Claude Code,#{pane_title}}
+  │  │                   │                            │
+  │  │                   │                            └─ false: just pane_title
+  │  │                   └─ true: pane_title + suffix
+  │  └─ condition: @is_claude == 1
+  └─ #{? = if/else
+```
+
+**Result:**
+
+| Pane state | Title in iTerm2 |
+|------------|----------------|
+| Claude Code running | `✳ Fix auth bug - Claude Code` |
+| Claude Code thinking | `⠂ Fix auth bug - Claude Code` |
+| Normal shell | `bash` (no suffix) |
+| After Claude Code exits | `bash` (suffix removed) |
 
 Without these settings, tmux absorbs the title change and iTerm2 never sees `autoName` containing "Claude Code", causing the script to fall back to local paths.
 
@@ -152,7 +197,7 @@ This reuses your existing SSH connection for the upload, avoiding extra authenti
 - **SSH options parsing** — Unrecognized options with arguments could cause the target to be misidentified.
 - **Port detection** — Only detected from explicit `-p PORT` in the SSH command. Ports in `~/.ssh/config` are handled by scp automatically.
 - **File overwrite** — Same-name files are overwritten silently (no namespacing).
-- **autoName timing** — After Claude Code auto-renames the topic, `autoName` may no longer contain "Claude Code". This only affects new drag-and-drop events; the initial session detection works because the default title is `✳ Claude Code`.
+- **autoName timing** — Claude Code auto-renames the topic after initial messages, removing "Claude Code" from the title. The tmux wrapper + `set-titles-string` suffix (step 3) solves this. Without it, detection fails after the first topic rename.
 
 ## Troubleshooting
 
