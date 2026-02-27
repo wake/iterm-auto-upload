@@ -24,7 +24,7 @@ iTerm2 進階設定 `fileDropCoprocess`，在檔案拖曳到視窗時觸發自�
 # iTerm2 → Settings → Advanced → 搜尋 "file drop"
 # 或用 defaults write（需先關閉 iTerm2）：
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)'
+  -string '/path/to/bin/iterm-upload /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)'
 ```
 
 ### iTerm2 Interpolated String 變數
@@ -100,7 +100,7 @@ iTerm2 的 `\(filenames)` 會提供 shell-quoted、空格分隔的所有拖曳�
 
 ### `bin/iterm-upload`（本機腳本）
 
-- 輸入：`$1=jobName`, `$2=autoName`, `$3=tty`, `$4=remoteDir`, `shift 4`, `$@=files`
+- 輸入：`$1=remoteDir`, `$2=jobName`, `$3=autoName`, `$4=tty`, `shift 4`, `$@=files`
 - 偵測環境（SSH + Claude Code）
 - 從 `ps -t <tty>` 解析 SSH 連線資訊（target + port）
 - scp 上傳
