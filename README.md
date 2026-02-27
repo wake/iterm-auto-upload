@@ -8,7 +8,7 @@ Drag-and-drop files into an iTerm2 window to automatically SCP upload them to a 
 Drag file into iTerm2
   → iTerm2 triggers fileDropCoprocess
   → Script detects SSH + Claude Code environment
-  → scp uploads file to remote ~/tmp/iterm-upload/
+  → scp uploads file to remote /tmp/iterm-upload/
   → Outputs absolute path with bracketed paste sequence
   → Claude Code auto-attaches the file ✓
 ```
@@ -49,16 +49,16 @@ git clone https://github.com/wake/iterm-auto-upload.git
 Go to **iTerm2 → Settings → Advanced** → search for **"file drop"**, and set the value to:
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)
 ```
 
-Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository. You can customize `~/tmp/iterm-upload` to any remote directory you prefer.
+Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository. You can customize `/tmp/iterm-upload` to any remote directory you prefer.
 
 Or via `defaults write` (quit iTerm2 first):
 
 ```bash
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)'
+  -string '/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)'
 ```
 
 ### 3. tmux title passthrough (if using tmux on remote)
@@ -90,7 +90,7 @@ Custom ports are only detected from explicit `-p PORT` in the SSH command. If th
 
 ### File overwrite
 
-Files uploaded to `~/tmp/iterm-upload/` are not namespaced. Uploading a file with the same name as an existing file will overwrite it silently.
+Files uploaded to `/tmp/iterm-upload/` are not namespaced. Uploading a file with the same name as an existing file will overwrite it silently.
 
 ### SSH authentication
 
@@ -112,7 +112,7 @@ On any error (SSH target parsing, mkdir, scp), the script falls back to pasting 
 |---|---|---|
 | Trigger | Direct drag (no modifier key) | Hold Option + drag |
 | Prerequisite | Local script only | Remote Shell Integration required |
-| Upload directory | `~/tmp/iterm-upload/` | Remote current working directory |
+| Upload directory | `/tmp/iterm-upload/` | Remote current working directory |
 | Path pasted | Yes (auto-attach in Claude Code) | No path pasted |
 | Environment detection | Auto-detect SSH + Claude Code | None |
 | Non-SSH fallback | Paste local path | No action |
@@ -129,7 +129,7 @@ On any error (SSH target parsing, mkdir, scp), the script falls back to pasting 
 拖曳檔案到 iTerm2
   → iTerm2 觸發 fileDropCoprocess
   → 腳本偵測 SSH + Claude Code 環境
-  → scp 上傳檔案到遠端 ~/tmp/iterm-upload/
+  → scp 上傳檔案到遠端 /tmp/iterm-upload/
   → 輸出絕對路徑 + bracketed paste 序列
   → Claude Code 自動附加檔案 ✓
 ```
@@ -160,10 +160,10 @@ git clone https://github.com/wake/iterm-auto-upload.git
 前往 **iTerm2 → Settings → Advanced** → 搜尋 **"file drop"**，設定為：
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)
 ```
 
-將 `/path/to/iterm-auto-upload` 替換為實際 clone 路徑。`~/tmp/iterm-upload` 可替換為任何你偏好的遠端目錄。
+將 `/path/to/iterm-auto-upload` 替換為實際 clone 路徑。`/tmp/iterm-upload` 可替換為任何你偏好的遠端目錄。
 
 ### 3. tmux 標題穿透（遠端使用 tmux 時）
 

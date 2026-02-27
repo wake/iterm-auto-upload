@@ -24,7 +24,7 @@ iTerm2 進階設定 `fileDropCoprocess`，在檔案拖曳到視窗時觸發自�
 # iTerm2 → Settings → Advanced → 搜尋 "file drop"
 # 或用 defaults write（需先關閉 iTerm2）：
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)'
+  -string '/path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)'
 ```
 
 ### iTerm2 Interpolated String 變數
@@ -80,15 +80,15 @@ fi
    a. 非 SSH 或非 Claude Code → stdout 輸出本地路徑 → 結束
    b. SSH + Claude Code：
       - 從 ps process tree 解析 SSH 連線的 user@host:port
-      - ssh mkdir -p ~/tmp/iterm-upload/
-      - scp 檔案到遠端 ~/tmp/iterm-upload/
+      - ssh mkdir -p /tmp/iterm-upload/
+      - scp 檔案到遠端 /tmp/iterm-upload/
       - stdout 輸出遠端路徑（空格分隔）
 5. coprocess stdout 自動送入終端作為鍵盤輸入
 ```
 
 ## 上傳目的地
 
-- 固定路徑：`~/tmp/iterm-upload/`
+- 固定路徑：`/tmp/iterm-upload/`
 - 上傳方式：`scp`
 
 ## 多檔案支援
@@ -119,7 +119,7 @@ iTerm2 的 `\(filenames)` 會提供 shell-quoted、空格分隔的所有拖曳�
 |---|---|---|
 | 觸發方式 | 直接拖曳（無需按鍵） | 按住 Option 拖曳 |
 | 前提條件 | 無（只需本機腳本） | 遠端需安裝 Shell Integration |
-| 上傳目錄 | 固定 `~/tmp/iterm-upload/` | 遠端當前工作目錄 |
+| 上傳目錄 | 固定 `/tmp/iterm-upload/` | 遠端當前工作目錄 |
 | 路徑貼入 | 自動貼入終端 | 不會貼入路徑 |
 | 環境偵測 | 自動判斷 SSH + CC | 無 |
 | 非 SSH 時 | 退回貼本地路徑 | 無反應 |

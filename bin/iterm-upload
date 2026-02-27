@@ -6,7 +6,7 @@
 #   /path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) REMOTE_DIR \(filenames)
 #
 # 範例：
-#   /path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)
+#   /path/to/bin/iterm-upload \(jobName) "\(autoName)" \(tty) /tmp/iterm-upload \(filenames)
 
 LOG="/tmp/iterm-upload.log"
 
