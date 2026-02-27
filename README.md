@@ -49,16 +49,16 @@ git clone https://github.com/wake/iterm-auto-upload.git
 Go to **iTerm2 → Settings → Advanced** → search for **"file drop"**, and set the value to:
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)
 ```
 
-Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository.
+Replace `/path/to/iterm-auto-upload` with the actual path where you cloned the repository. You can customize `~/tmp/iterm-upload` to any remote directory you prefer.
 
 Or via `defaults write` (quit iTerm2 first):
 
 ```bash
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)'
+  -string '/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)'
 ```
 
 ### 3. tmux title passthrough (if using tmux on remote)
@@ -160,10 +160,10 @@ git clone https://github.com/wake/iterm-auto-upload.git
 前往 **iTerm2 → Settings → Advanced** → 搜尋 **"file drop"**，設定為：
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload \(jobName) "\(autoName)" \(tty) ~/tmp/iterm-upload \(filenames)
 ```
 
-將 `/path/to/iterm-auto-upload` 替換為實際 clone 路徑。
+將 `/path/to/iterm-auto-upload` 替換為實際 clone 路徑。`~/tmp/iterm-upload` 可替換為任何你偏好的遠端目錄。
 
 ### 3. tmux 標題穿透（遠端使用 tmux 時）
 
