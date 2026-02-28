@@ -3,10 +3,10 @@
 # 在 SSH + Claude Code 環境中自動 scp 上傳檔案到遠端
 #
 # fileDropCoprocess 設定：
-#   /path/to/bin/iterm-upload REMOTE_DIR \(jobName) "\(autoName)" \(tty) \(filenames)
+#   /path/to/bin/iterm-upload "\(user.is_claude)" REMOTE_DIR \(jobName) "\(autoName)" \(tty) \(filenames)
 #
 # 範例：
-#   /path/to/bin/iterm-upload /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+#   /path/to/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
 
 LOG="/tmp/iterm-upload.log"
 
@@ -21,15 +21,16 @@ fallback_local() {
 }
 
 # --- 解析參數 ---
-REMOTE_RELATIVE_DIR="$1"
-jobName="$2"
-autoName="$3"
-tty="$4"
-shift 4
+is_claude="$1"
+REMOTE_RELATIVE_DIR="$2"
+jobName="$3"
+autoName="$4"
+tty="$5"
+shift 5
 files=("$@")
 
 log "=== DROP EVENT ==="
-log "jobName=$jobName autoName=$autoName tty=$tty remoteDir=$REMOTE_RELATIVE_DIR"
+log "is_claude=$is_claude jobName=$jobName autoName=$autoName tty=$tty remoteDir=$REMOTE_RELATIVE_DIR"
 log "files=${files[*]}"
 
 # --- 環境判斷 ---
@@ -39,13 +40,13 @@ if [ "$jobName" != "ssh" ]; then
   exit 0
 fi
 
-if ! echo "$autoName" | grep -q "Claude Code"; then
-  log "Not Claude Code session (autoName=$autoName), using local paths"
+if [ "$is_claude" != "1" ]; then
+  log "Not Claude Code session (is_claude=$is_claude), using local paths"
   printf '%s' "$*"
   exit 0
 fi
 
-log "SSH + Claude Code detected, proceeding with upload"
+log "SSH + Claude Code detected (user.is_claude=1), proceeding with upload"
 
 # --- 從 ps 解析 SSH process ---
 ssh_cmd=$(ps -t "$tty" -o args= | grep -E '^ssh ' | head -1)
