@@ -34,14 +34,14 @@ iTerm2 passes session metadata via [interpolated string](https://iterm2.com/docu
 **iTerm2 → Settings → Advanced** → search `"file drop"`, set:
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)
 ```
 
 Or via `defaults write` (quit iTerm2 first):
 
 ```bash
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/iterm-auto-upload/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)'
+  -string '/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)'
 ```
 
 Replace `/path/to/iterm-auto-upload` with your clone path. `/tmp/iterm-upload` is the remote upload directory.
@@ -177,14 +177,14 @@ iTerm2 透過 interpolated string 變數傳入 session 資訊：
 **iTerm2 → Settings → Advanced** → 搜尋 `"file drop"`，設定為：
 
 ```
-/path/to/iterm-auto-upload/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)
 ```
 
 或用 `defaults write`（需先關閉 iTerm2）：
 
 ```bash
 defaults write com.googlecode.iterm2 fileDropCoprocess \
-  -string '/path/to/iterm-auto-upload/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)'
+  -string '/path/to/iterm-auto-upload/bin/iterm-upload /tmp/iterm-upload "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)'
 ```
 
 ## Step 2. 上傳腳本

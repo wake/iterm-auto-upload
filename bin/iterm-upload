@@ -3,10 +3,10 @@
 # 在 SSH + Claude Code 環境中自動 scp 上傳檔案到遠端
 #
 # fileDropCoprocess 設定：
-#   /path/to/bin/iterm-upload "\(user.is_claude)" REMOTE_DIR \(jobName) "\(autoName)" \(tty) \(filenames)
+#   /path/to/bin/iterm-upload REMOTE_DIR "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)
 #
 # 範例：
-#   /path/to/bin/iterm-upload "\(user.is_claude)" /tmp/iterm-upload \(jobName) "\(autoName)" \(tty) \(filenames)
+#   /path/to/bin/iterm-upload /tmp/iterm-upload "\(user.is_claude)" \(jobName) "\(autoName)" \(tty) \(filenames)
 
 LOG="/tmp/iterm-upload.log"
 
@@ -21,8 +21,8 @@ fallback_local() {
 }
 
 # --- 解析參數 ---
-is_claude="$1"
-REMOTE_RELATIVE_DIR="$2"
+REMOTE_RELATIVE_DIR="$1"
+is_claude="$2"
 jobName="$3"
 autoName="$4"
 tty="$5"
