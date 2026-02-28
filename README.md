@@ -75,7 +75,7 @@ Host *
 
 ## Step 3. Set Up Claude Code Wrapper
 
-The script detects Claude Code by checking `user.is_claude`, an iTerm2 [user-defined variable](https://iterm2.com/documentation-scripting-fundamentals.html). This is set via an OSC 1337 escape sequence from the remote shell, and works reliably in both direct SSH and tmux sessions.
+The script detects Claude Code by checking `user.is_claude`, an iTerm2 [user-defined variable](https://iterm2.com/documentation-scripting-fundamentals.html). This is set via an OSC 1337 escape sequence from the remote shell.
 
 Add a shell wrapper on the **remote machine** (`~/.zshrc` or `~/.bashrc`):
 
@@ -84,24 +84,6 @@ claude() {
   printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
   command claude "$@"
   printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
-}
-```
-
-For **tmux** sessions, wrap the escape sequence with DCS passthrough:
-
-```bash
-claude() {
-  if [ -n "$TMUX" ]; then
-    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 1 | base64)"
-  else
-    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
-  fi
-  command claude "$@"
-  if [ -n "$TMUX" ]; then
-    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 0 | base64)"
-  else
-    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
-  fi
 }
 ```
 
@@ -135,9 +117,43 @@ cat /tmp/iterm-upload.log
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Always pastes local paths | `is_claude` not set | Check Claude wrapper (step 3) |
-| Works in SSH but not tmux | DCS passthrough missing | Use tmux version of wrapper (step 3) |
+| Works in SSH but not tmux | OSC 1337 blocked by tmux | See "tmux passthrough" below |
 | Upload fails silently | SSH needs password/2FA | Use SSH keys or ControlMaster |
 | "Cannot find ssh process" | SSH behind a wrapper | Check `ps -t <tty>` manually |
+
+## tmux passthrough
+
+If the wrapper works in a direct SSH session but not inside tmux, the OSC 1337 sequence is being swallowed by tmux. Two options:
+
+### Option A: Enable `allow-passthrough` (recommended)
+
+Add to remote `~/.tmux.conf`:
+
+```bash
+set -g allow-passthrough on
+```
+
+Reload with `tmux source ~/.tmux.conf`. The simple wrapper from step 3 will work as-is.
+
+### Option B: DCS passthrough in the wrapper
+
+If you can't enable `allow-passthrough`, wrap the escape sequence with DCS explicitly:
+
+```bash
+claude() {
+  if [ -n "$TMUX" ]; then
+    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 1 | base64)"
+  else
+    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
+  fi
+  command claude "$@"
+  if [ -n "$TMUX" ]; then
+    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 0 | base64)"
+  else
+    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
+  fi
+}
+```
 
 ---
 
@@ -216,7 +232,7 @@ Host *
 
 ## Step 3. 設定 Claude Code Wrapper
 
-偵測邏輯：檢查 `user.is_claude` 這個 iTerm2 [user-defined variable](https://iterm2.com/documentation-scripting-fundamentals.html)。它透過 OSC 1337 escape sequence 從遠端 shell 設定，在直接 SSH 和 tmux 環境下都能正常運作。
+偵測邏輯：檢查 `user.is_claude` 這個 iTerm2 [user-defined variable](https://iterm2.com/documentation-scripting-fundamentals.html)。它透過 OSC 1337 escape sequence 從遠端 shell 設定。
 
 在**遠端機器**的 `~/.zshrc` 或 `~/.bashrc` 加入 wrapper：
 
@@ -225,24 +241,6 @@ claude() {
   printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
   command claude "$@"
   printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
-}
-```
-
-**tmux** 環境需用 DCS passthrough 包裝：
-
-```bash
-claude() {
-  if [ -n "$TMUX" ]; then
-    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 1 | base64)"
-  else
-    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
-  fi
-  command claude "$@"
-  if [ -n "$TMUX" ]; then
-    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 0 | base64)"
-  else
-    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
-  fi
 }
 ```
 
@@ -276,6 +274,40 @@ cat /tmp/iterm-upload.log
 | 症狀 | 原因 | 修正 |
 |------|------|------|
 | 總是貼本地路徑 | `is_claude` 未設定 | 檢查 Claude wrapper（step 3）|
-| SSH 可用但 tmux 不行 | 缺少 DCS passthrough | 使用 tmux 版 wrapper（step 3）|
+| SSH 可用但 tmux 不行 | OSC 1337 被 tmux 攔截 | 見下方「tmux passthrough」|
 | 上傳無聲失敗 | SSH 需要密碼/2FA | 使用 SSH key 或 ControlMaster |
 | "Cannot find ssh process" | SSH 被 wrapper 包裝 | 手動檢查 `ps -t <tty>` |
+
+## tmux passthrough
+
+如果 wrapper 在直接 SSH 中正常，但在 tmux 中無法觸發，代表 OSC 1337 被 tmux 攔截了。兩種解法：
+
+### 方式 A：啟用 `allow-passthrough`（推薦）
+
+在遠端 `~/.tmux.conf` 加入：
+
+```bash
+set -g allow-passthrough on
+```
+
+重載設定 `tmux source ~/.tmux.conf`。Step 3 的簡單版 wrapper 即可正常運作。
+
+### 方式 B：在 wrapper 中手動 DCS 包裝
+
+如果無法啟用 `allow-passthrough`，可在 wrapper 中手動加上 DCS passthrough：
+
+```bash
+claude() {
+  if [ -n "$TMUX" ]; then
+    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 1 | base64)"
+  else
+    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 1 | base64)"
+  fi
+  command claude "$@"
+  if [ -n "$TMUX" ]; then
+    printf '\033Ptmux;\033\033]1337;SetUserVar=%s=%s\007\033\\' "is_claude" "$(echo -n 0 | base64)"
+  else
+    printf '\033]1337;SetUserVar=%s=%s\007' "is_claude" "$(echo -n 0 | base64)"
+  fi
+}
+```
